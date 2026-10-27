@@ -9,3 +9,4 @@ def main() -> None:
 
     try:
         fly_map = MapParser().load(sys.argv[1])
+    except 
