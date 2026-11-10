@@ -89,6 +89,8 @@ class MapParser:
                 if max_drones <= 0:
                     raise ParseError(line_no, "max_drones must be positive")
         else:
+            if zone_type is ZoneType.BLOCKED:
+                raise ParseError(line_no, f"{prefix} must not be blocked")
             max_drones = None
             if prefix == "start_hub":
                 if self._start is not None:

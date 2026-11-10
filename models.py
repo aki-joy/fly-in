@@ -6,11 +6,12 @@ class ZoneType(Enum):
     NORMAL = "normal"
     BLOCKED = "blocked"
     RESTRICTED = "restricted"
-    PRIORITY = "priotrity"
+    PRIORITY = "priority"
 
     @property
     def cost(self) -> int:
-        pass
+
+        return 2 if self is ZoneType.RESTRICTED else 1
 
 
 @dataclass

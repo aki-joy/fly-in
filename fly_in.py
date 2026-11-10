@@ -1,6 +1,9 @@
 import sys
 from parse import MapParser
 from error import FlyInError
+from graph import Graph
+from planner import Planner
+from simulation import Simulation
 
 
 def main() -> None:
@@ -10,6 +13,10 @@ def main() -> None:
 
     try:
         fly_map = MapParser().load(sys.argv[1])
+        graph = Graph(fly_map)
+        simulation = Simulation(graph, Planner(graph).solve())
+        for line in simulation.lines():
+            print(line)
     except FlyInError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
