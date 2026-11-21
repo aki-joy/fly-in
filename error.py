@@ -10,6 +10,7 @@ class ParseError(FlyInError):
     """parseに失敗したときに挙げられるエラー"""
 
     def __init__(self, line_no: int | None, reason: str) -> None:
+        """行番号（ファイル全体の問題ならNone）と理由を保持する。"""
         self.line_no = line_no
         self.reason = reason
         where = f"line {line_no}: " if line_no is not None else ""
@@ -18,3 +19,7 @@ class ParseError(FlyInError):
 
 class NoPathError(FlyInError):
     """start_hubからend_hubへ辿り着く経路がないときに挙げられるエラー"""
+
+
+class VisualizerError(FlyInError):
+    """GUIのウィンドウを開けないときに挙げられるエラー"""

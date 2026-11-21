@@ -3,35 +3,35 @@ from collections import deque
 
 
 class FlowNetwork:
-    """Directed flow network with residual edges.
+    """残余辺を持つ有向フローネットワーク。
 
-    Every edge added with add_edge() gets a paired reverse edge. Edge e
-    and its reverse are stored at indices e and e ^ 1, so the flow on a
-    forward edge is the remaining capacity of its reverse edge.
+    add_edge()で追加した辺には、対になる逆辺が作られる。辺eと
+    その逆辺はインデックスeとe ^ 1に格納されるので、順方向の辺の
+    フロー量は、逆辺の残り容量と等しい。
     """
 
     _INF = float("inf")
 
     def __init__(self) -> None:
-        """Create an empty network."""
+        """空のネットワークを作る。"""
         self._head: list[list[int]] = []
         self._to: list[int] = []
         self._cap: list[int] = []
         self._cost: list[int] = []
 
     def add_node(self) -> int:
-        """Add a node and return its id."""
+        """ノードを追加してそのidを返す。"""
         self._head.append([])
         return len(self._head) - 1
 
     def add_edge(self, u: int, v: int, cap: int, cost: int = 0) -> int:
-        """Add an edge u -> v and return its id.
+        """辺u -> vを追加してそのidを返す。
 
         Args:
-            u: Tail node id.
-            v: Head node id.
-            cap: Capacity (must be >= 0).
-            cost: Cost per unit of flow (must be >= 0).
+            u: 始点ノードのid。
+            v: 終点ノードのid。
+            cap: 容量（0以上）。
+            cost: フロー1単位あたりのコスト（0以上）。
         """
         e = len(self._to)
         self._to += [v, u]
@@ -42,30 +42,30 @@ class FlowNetwork:
         return e
 
     def out_edges(self, u: int) -> list[int]:
-        """Return the ids of forward edges leaving u."""
+        """uから出ていく順方向の辺のidを返す。"""
         return [e for e in self._head[u] if e % 2 == 0]
 
     def head(self, e: int) -> int:
-        """Return the node edge e points to."""
+        """辺eが指すノードを返す。"""
         return self._to[e]
 
     def flow(self, e: int) -> int:
-        """Return the flow currently on forward edge e."""
+        """順方向の辺eに今流れているフロー量を返す。"""
         return self._cap[e ^ 1]
 
     def add_flow_back(self, e: int) -> None:
-        """Remove one unit of flow from forward edge e."""
+        """順方向の辺eからフローを1単位取り除く。"""
         self._cap[e] += 1
         self._cap[e ^ 1] -= 1
 
     def max_flow(self, s: int, t: int, limit: int) -> int:
-        """Push up to limit units from s to t (Edmonds-Karp).
+        """sからtへ最大limit単位のフローを流す（Edmonds-Karp法）。
 
-        Flow already in the network is kept, so this can be called again
-        after adding nodes and edges.
+        ネットワーク内の既存のフローは保持されるので、ノードや辺を
+        追加したあとに再度呼び出せる。
 
         Returns:
-            The amount of flow pushed by this call.
+            この呼び出しで流したフロー量。
         """
         total = 0
         while total < limit:
@@ -76,13 +76,13 @@ class FlowNetwork:
         return total
 
     def min_cost_flow(self, s: int, t: int, limit: int) -> int:
-        """Push up to limit units from s to t at minimum total cost.
+        """sからtへ最大limit単位のフローを、総コスト最小で流す。
 
-        Uses successive shortest paths with Dijkstra and node potentials.
-        Requires an empty network whose edge costs are all >= 0.
+        ダイクストラ法とポテンシャルを使った逐次最短路法で求める。
+        フローが空で、全辺のコストが0以上のネットワークが前提。
 
         Returns:
-            The amount of flow pushed.
+            流したフロー量。
         """
         n = len(self._head)
         potential = [0] * n
@@ -114,7 +114,7 @@ class FlowNetwork:
         return total
 
     def _bfs(self, s: int, t: int) -> list[int] | None:
-        """Find a shortest augmenting path; return predecessor edges."""
+        """最短の増加パスを探し、各ノードへの直前の辺のリストを返す。"""
         prev = [-1] * len(self._head)
         seen = [False] * len(self._head)
         seen[s] = True
@@ -132,7 +132,7 @@ class FlowNetwork:
         return None
 
     def _push(self, s: int, t: int, prev: list[int], limit: int) -> int:
-        """Push flow along the path recorded in prev; return the amount."""
+        """prevに記録されたパスに沿ってフローを流し、その量を返す。"""
         amount = limit
         v = t
         while v != s:

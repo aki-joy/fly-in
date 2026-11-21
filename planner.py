@@ -18,24 +18,24 @@ _RESTRICTED_MOVE_COST = 6
 
 
 class TimeExpandedNetwork:
-    """Flow network where each node is a (zone, turn) state.
+    """各ノードが（ゾーン, ターン）の状態を表すフローネットワーク。
 
-    Layer t holds the state at the end of turn t. For every zone except
-    the end there is an "in" node and an "out" node joined by an edge of
-    capacity max_drones, which limits how many drones are in the zone.
-    A move during turn t goes from the "out" node of layer t-1 to the "in"
-    node of layer t through an edge of capacity max_link_capacity. A move
-    into a restricted zone passes through a transit node at layer t and
-    arrives at layer t+1; the transit node has no wait edge, so a drone
-    can never stay on the connection.
+    レイヤーtはターンt終了時点の状態を持つ。end以外の各ゾーンには
+    "in"ノードと"out"ノードがあり、容量max_dronesの辺で結ばれる。
+    これでゾーン内にいられるドローン数を制限する。ターンtの移動は、
+    レイヤーt-1の"out"ノードからレイヤーtの"in"ノードへ、容量
+    max_link_capacityの辺を通る。restrictedゾーンへの移動は、
+    レイヤーtの中継(transit)ノードを経由してレイヤーt+1に到着する。
+    中継ノードには待機用の辺がないので、ドローンが接続上に
+    留まることはない。
     """
 
     def __init__(self, graph: Graph, use_costs: bool) -> None:
-        """Create the network with only layer 0.
+        """レイヤー0だけを持つネットワークを作る。
 
         Args:
-            graph: The zone graph.
-            use_costs: Whether to set edge costs (for min-cost flow).
+            graph: ゾーンのグラフ。
+            use_costs: 辺にコストを設定するか（最小費用流で使う）。
         """
         self.net = FlowNetwork()
         self.source = self.net.add_node()
@@ -54,7 +54,7 @@ class TimeExpandedNetwork:
                           self._big)
 
     def add_layer(self) -> None:
-        """Extend the network by one turn."""
+        """ネットワークを1ターン分延長する。"""
         t = self.turns + 1
         self._add_zone_layer(t)
         prev_out = self._zone_out[t - 1]
@@ -84,7 +84,7 @@ class TimeExpandedNetwork:
         self.turns = t
 
     def _add_zone_layer(self, t: int) -> None:
-        """Create the in/out nodes of every non-blocked zone at layer t."""
+        """レイヤーtに、blockedでない全ゾーンのin/outノードを作る。"""
         zone_in: dict[str, int] = {}
         zone_out: dict[str, int] = {}
         for name, zone in self._graph.zones.items():
@@ -106,22 +106,22 @@ class TimeExpandedNetwork:
         self._zone_out.append(zone_out)
 
     def _edge(self, u: int, v: int, cap: int, cost: int) -> None:
-        """Add an edge, dropping the cost when costs are disabled."""
+        """辺を追加する。コストが無効ならコストを0にする。"""
         self.net.add_edge(u, v, cap, cost if self._use_costs else 0)
 
 
 class Planner:
-    """Compute a schedule that delivers every drone in the fewest turns."""
+    """全ドローンを最少ターンで届けるスケジュールを計算する。"""
 
     def __init__(self, graph: Graph) -> None:
-        """Store the graph to plan on."""
+        """計画に使うグラフを保持する。"""
         self._graph = graph
 
     def solve(self) -> list[Timeline]:
-        """Return one timeline per drone, ordered by departure.
+        """ドローンごとのタイムラインを、出発順に並べて返す。
 
         Raises:
-            NoPathError: If the end zone cannot be reached.
+            NoPathError: endゾーンに到達できない場合。
         """
         lower = self._graph.shortest_turns()
         if lower is None:
@@ -131,10 +131,10 @@ class Planner:
         return self._schedule(turns)
 
     def _min_turns(self, lower: int) -> int:
-        """Find the smallest turn count that lets every drone arrive.
+        """全ドローンが到着できる最小のターン数を求める。
 
-        Layers are added one at a time and the existing flow is kept, so
-        each step only searches for the additional augmenting paths.
+        レイヤーを1つずつ追加し、既存のフローは保持したままにする。
+        そのため各ステップでは、追加分の増加パスだけを探せばよい。
         """
         n = self._graph.nb_drones
         # One drone per turn along a shortest path always works.
@@ -150,7 +150,7 @@ class Planner:
         return ten.turns
 
     def _schedule(self, turns: int) -> list[Timeline]:
-        """Build a min-cost flow for turns and split it into timelines."""
+        """ターン数turnsで最小費用流を求め、タイムラインに分解する。"""
         ten = TimeExpandedNetwork(self._graph, use_costs=True)
         for _ in range(turns):
             ten.add_layer()
@@ -163,7 +163,7 @@ class Planner:
 
     @staticmethod
     def _extract(ten: TimeExpandedNetwork) -> Timeline:
-        """Follow one unit of flow from source to sink and consume it."""
+        """sourceからsinkまでフローを1単位たどり、それを消費する。"""
         net = ten.net
         timeline: Timeline = []
         u = ten.source
@@ -181,7 +181,7 @@ class Planner:
 
     @staticmethod
     def _departure(timeline: Timeline) -> int:
-        """Return the turn at which the drone first leaves the start."""
+        """ドローンが最初にstartを離れるターンを返す。"""
         for t in range(1, len(timeline)):
             if timeline[t] != timeline[0]:
                 return t

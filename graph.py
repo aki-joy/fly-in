@@ -6,6 +6,7 @@ from models import FlyInMap, Zone, ZoneType
 
 @dataclass(frozen=True)
 class Edge:
+    """隣接ゾーンへの移動1つ。costはかかるターン数。"""
 
     to: str
     cost: int
@@ -14,14 +15,17 @@ class Edge:
 
 
 class Graph:
+    """ゾーンの隣接リストと、接続ごとの容量を持つグラフ。"""
 
     def __init__(self, fly_map: FlyInMap) -> None:
-
+        """マップから隣接リストを作る。blockedゾーンへの辺は張らない。"""
         self.start: str = fly_map.start
         self.end: str = fly_map.end
         self.nb_drones: int = fly_map.nb_drones
         self.zones: dict[str, Zone] = fly_map.zones
-        self.adjacency: dict[str, list[Edge]] = {name: [] for name in fly_map.zones}
+        self.adjacency: dict[str, list[Edge]] = {
+            name: [] for name in fly_map.zones
+        }
         self.link_capacity: list[int] = []
         self.link_names: list[str] = []
 
@@ -36,15 +40,16 @@ class Graph:
             self.adjacency[b.name].append(self._make_edge(a, link_id))
 
     def neighbors(self, name: str) -> list[Edge]:
+        """ゾーンnameから出ていく辺のリストを返す。"""
         return self.adjacency[name]
 
     def shortest_turns(self) -> int | None:
-        """Return the fewest turns one drone needs to reach the end.
+        """1機のドローンがendに着くまでの最少ターン数を返す。
 
-        Uses Dijkstra's algorithm with edge costs (restricted = 2 turns).
+        辺のコスト（restricted = 2ターン）を使ったダイクストラ法で求める。
 
         Returns:
-            The number of turns, or None if the end is unreachable.
+            ターン数。endに到達できなければNone。
         """
         dist: dict[str, int] = {self.start: 0}
         heap: list[tuple[int, str]] = [(0, self.start)]
@@ -63,6 +68,7 @@ class Graph:
 
     @staticmethod
     def _make_edge(dest: Zone, link_id: int) -> Edge:
+        """ゾーンdestへ向かう辺を、destの種類に応じて作る。"""
         return Edge(
             to=dest.name,
             cost=dest.zone_type.cost,

@@ -2,3 +2,6 @@
 __pycache__/
 SYNTAX.md
 maps/
+.venv/
+.DS_Store
+FLOW.md

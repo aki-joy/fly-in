@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 
 
 class ZoneType(Enum):
+    """ゾーンの種類。"""
+
     NORMAL = "normal"
     BLOCKED = "blocked"
     RESTRICTED = "restricted"
@@ -10,12 +12,14 @@ class ZoneType(Enum):
 
     @property
     def cost(self) -> int:
-
+        """このゾーンへ移動するのにかかるターン数を返す。"""
         return 2 if self is ZoneType.RESTRICTED else 1
 
 
 @dataclass
 class Zone:
+    """マップ上のゾーン（ハブ）。max_dronesがNoneなら上限なし。"""
+
     name: str
     x: int
     y: int
@@ -26,6 +30,8 @@ class Zone:
 
 @dataclass
 class Connection:
+    """2つのゾーンを結ぶ双方向の接続。"""
+
     zone_a: str
     zone_b: str
     max_link_capacity: int = 1
@@ -33,6 +39,8 @@ class Connection:
 
 @dataclass
 class FlyInMap:
+    """マップファイルをパースした結果。"""
+
     nb_drones: int
     start: str
     end: str

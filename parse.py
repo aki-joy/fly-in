@@ -1,10 +1,16 @@
+import re
+
 from models import FlyInMap, Zone, Connection, ZoneType
 from error import MapLoadError, ParseError
-import re
+
+_INT_RE = re.compile(r"-?[0-9]+")
 
 
 class MapParser:
+    """マップファイルを読み、検証してFlyInMapを作る。"""
+
     def __init__(self) -> None:
+        """空の状態でパーサーを作る。"""
         self._nb_drones: int | None = None
         self._start: str | None = None
         self._end: str | None = None
@@ -13,6 +19,12 @@ class MapParser:
         self._edge_keys: set[frozenset[str]] = set()
 
     def load(self, path: str) -> FlyInMap:
+        """ファイルpathを読んでパースする。
+
+        Raises:
+            MapLoadError: ファイルを開けない・デコードできない場合。
+            ParseError: 内容が不正な場合。
+        """
         try:
             with open(path, encoding="utf-8") as f:
                 lines = f.readlines()
@@ -23,11 +35,16 @@ class MapParser:
         except OSError as e:
             raise MapLoadError(f"cannot read {path}: {e.strerror}") from e
         except UnicodeDecodeError as e:
-            raise MapLoadError(f"{path} is not a valid UTF-8 text file") from e
+            raise MapLoadError(
+                f"{path} is not a valid UTF-8 text file") from e
         return self.parse(lines)
 
     def parse(self, lines: list[str]) -> FlyInMap:
+        """各行を種類ごとに分岐させ、最後に全体を検証する。
 
+        Raises:
+            ParseError: 不正な行があった場合（行番号つき）。
+        """
         for line_no, raw in enumerate(lines, 1):
             line = raw.split("#", 1)[0].strip()
             if not line:
@@ -40,10 +57,12 @@ class MapParser:
 
             if prefix == "nb_drones":
                 if self._nb_drones is not None:
-                    raise ParseError(line_no, "nb_drones defined more than once")
+                    raise ParseError(line_no,
+                                     "nb_drones defined more than once")
                 self._parse_nb_drones(line_no, rest)
             elif self._nb_drones is None:
-                raise ParseError(line_no, "first line must be 'nb_drones: <number>'")
+                raise ParseError(line_no,
+                                 "first line must be 'nb_drones: <number>'")
             elif prefix in ("start_hub", "end_hub", "hub"):
                 self._parse_hub(line_no, prefix, rest)
             elif prefix == "connection":
@@ -53,13 +72,18 @@ class MapParser:
         return self._build()
 
     def _parse_nb_drones(self, line_no: int, text: str) -> None:
-        """Parse 'nb_drones: <positive_integer>'."""
+        """'nb_drones: <正の整数>' の行を解釈する。"""
         n = self._parse_int(line_no, "nb_drones", text)
         if n <= 0:
-            raise ParseError(line_no, f"nb_drones must be positive: '{text}'")
+            raise ParseError(line_no,
+                             f"nb_drones must be positive: '{text}'")
         self._nb_drones = n
 
     def _parse_hub(self, line_no: int, prefix: str, text: str) -> None:
+        """'<name> <x> <y> [metadata]' の行を解釈してゾーンを登録する。
+
+        start_hub / end_hub の max_drones は無視して上限なしにする。
+        """
         body, meta = self._split_metadata(line_no, text)
         parts = body.split()
         if len(parts) != 3:
@@ -67,7 +91,8 @@ class MapParser:
         name, x_str, y_str = parts
 
         if "-" in name:
-            raise ParseError(line_no, f"zone name must not contain '-': '{name}'")
+            raise ParseError(line_no,
+                             f"zone name must not contain '-': '{name}'")
         if name in self._zones:
             raise ParseError(line_no, f"duplicate zone name: '{name}'")
         x = self._parse_int(line_no, "x", x_str)
@@ -80,12 +105,14 @@ class MapParser:
         try:
             zone_type = ZoneType(meta.get("zone", "normal"))
         except ValueError:
-            raise ParseError(line_no, f"invalid zone type: '{meta['zone']}'") from None
+            raise ParseError(line_no,
+                             f"invalid zone type: '{meta['zone']}'") from None
 
         max_drones: int | None = 1
         if prefix == "hub":
             if "max_drones" in meta:
-                max_drones = self._parse_int(line_no, "max_drones", meta["max_drones"])
+                max_drones = self._parse_int(line_no, "max_drones",
+                                             meta["max_drones"])
                 if max_drones <= 0:
                     raise ParseError(line_no, "max_drones must be positive")
         else:
@@ -94,17 +121,20 @@ class MapParser:
             max_drones = None
             if prefix == "start_hub":
                 if self._start is not None:
-                    raise ParseError(line_no, "start_hub defined more than once")
+                    raise ParseError(line_no,
+                                     "start_hub defined more than once")
                 self._start = name
             else:
                 if self._end is not None:
-                    raise ParseError(line_no, "end_hub defined more than once")
+                    raise ParseError(line_no,
+                                     "end_hub defined more than once")
                 self._end = name
 
-        self._zones[name] = Zone(name, x, y, zone_type, meta.get("color"), max_drones)
+        self._zones[name] = Zone(name, x, y, zone_type, meta.get("color"),
+                                 max_drones)
 
     def _parse_connection(self, line_no: int, text: str) -> None:
-
+        """'<zone1>-<zone2> [metadata]' の行を解釈して接続を登録する。"""
         body, meta = self._split_metadata(line_no, text)
         parts = body.split()
         if len(parts) != 1:
@@ -132,13 +162,15 @@ class MapParser:
                 line_no, "max_link_capacity", meta["max_link_capacity"]
             )
             if capacity <= 0:
-                raise ParseError(line_no, "max_link_capacity must be positive")
+                raise ParseError(line_no,
+                                 "max_link_capacity must be positive")
 
         self._edge_keys.add(key)
         self._connections.append(Connection(a, b, capacity))
 
-    def _split_metadata(self, line_no: int, text: str) -> tuple[str, dict[str, str]]:
-
+    def _split_metadata(self, line_no: int,
+                        text: str) -> tuple[str, dict[str, str]]:
+        """textを本体と "[k=v ...]" のメタデータ（dict）に分ける。"""
         body, sep, inner = text.partition("[")
         if not sep:
             if "]" in text:
@@ -157,13 +189,13 @@ class MapParser:
         return body, meta
 
     def _parse_int(self, line_no: int, field: str, text: str) -> int:
-        _INT_RE = re.compile(r"-?[0-9]+")
+        """textを整数に変換する。整数でなければParseError。"""
         if not _INT_RE.fullmatch(text):
             raise ParseError(line_no, f"{field} must be an integer: '{text}'")
         return int(text)
 
     def _build(self) -> FlyInMap:
-        """Check whole-file constraints and build the FlyInMap."""
+        """ファイル全体に関わる制約をチェックしてFlyInMapを作る。"""
         if self._nb_drones is None:
             raise ParseError(None, "missing 'nb_drones' line")
         if self._start is None:
@@ -171,5 +203,6 @@ class MapParser:
         if self._end is None:
             raise ParseError(None, "missing end_hub")
         return FlyInMap(
-            self._nb_drones, self._start, self._end, self._zones, self._connections
+            self._nb_drones, self._start, self._end, self._zones,
+            self._connections
         )
