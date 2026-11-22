@@ -51,19 +51,19 @@ class Graph:
         Returns:
             ターン数。endに到達できなければNone。
         """
-        dist: dict[str, int] = {self.start: 0}
+        best_turns: dict[str, int] = {self.start: 0}
         heap: list[tuple[int, str]] = [(0, self.start)]
         while heap:
-            d, name = heapq.heappop(heap)
-            if name == self.end:
-                return d
-            if d > dist[name]:
+            turns, zone = heapq.heappop(heap)
+            if zone == self.end:
+                return turns
+            if turns > best_turns[zone]:
                 continue
-            for edge in self.adjacency[name]:
-                nd = d + edge.cost
-                if nd < dist.get(edge.to, nd + 1):
-                    dist[edge.to] = nd
-                    heapq.heappush(heap, (nd, edge.to))
+            for edge in self.adjacency[zone]:
+                next_turns = turns + edge.cost
+                if next_turns < best_turns.get(edge.to, next_turns + 1):
+                    best_turns[edge.to] = next_turns
+                    heapq.heappush(heap, (next_turns, edge.to))
         return None
 
     @staticmethod

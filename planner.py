@@ -3,14 +3,9 @@ from flow import FlowNetwork
 from graph import Graph
 from models import ZoneType
 
-# A drone's position at each turn: index t is where it is at the end of
-# turn t. A position is a zone name, or a connection name ("a-b") while
-# the drone is in flight toward a restricted zone.
+
 Timeline = list[str]
 
-# Costs used only to choose among solutions with the same turn count.
-# Waiting is cheaper than any move, so two drones never swap places
-# through the same connection when they could both just wait.
 _WAIT_COST = 1
 _PRIORITY_MOVE_COST = 2
 _NORMAL_MOVE_COST = 3

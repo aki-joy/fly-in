@@ -64,7 +64,7 @@ list[Timeline]（ドローンごとの「ターン t にどこにいるか」）
 ### `link_names`
 `connection: hub-roof1` に対応する接続名 `"hub-roof1"` を、`link_id` の順に並べたリスト。restricted なゾーンへ飛行中のドローンを出力するとき（`D1-hub-roof1`）に使う。
 
-### `shortest_turns()`（[graph.py:41](graph.py#L41)）
+### `shortest_turns()`（[graph.py:46](graph.py#L46)）
 Dijkstra 法で、**1機だけなら start から end まで何ターンで行けるか**を求める。辺の cost（restricted は 2）を距離として使う。
 
 - 戻り値が `None` → end に辿り着けない → Planner が `NoPathError` を投げる
@@ -76,6 +76,118 @@ Dijkstra 法の流れ:
 3. それが end なら、その距離が答え
 4. 隣のゾーンについて「今の距離 + 辺の cost」が、記録済みの距離より小さければ更新して heap に入れる
 5. heap が空になったら、end には辿り着けない
+
+#### 変数の役割
+
+```
+  heap       = 「次にどこを調べるか」の順番待ち（小さい順に出てくる）
+  best_turns = 「各ゾーンに最短何ターンで着けるか」の記録表
+
+  next_turns = 取り出したゾーンまでのターン数 + 隣に入るコスト
+               └→ 記録より早ければ記録表を書き換え、heap に並ばせる
+               └→ 遅いか同じなら捨てる
+```
+
+- `edge.cost` は**行き先ゾーン**の種類で決まる（`_make_edge` が `dest.zone_type.cost` をコピー）。normal / priority は 1、restricted は 2。接続そのものはコストを持たない
+- 「確定」するのは heap から**取り出したとき**。記録表に書いた時点の値は、まだ仮の値
+- 1回のループで計算するのは、取り出したゾーンの**隣（1歩先）まで**。その先は、隣のゾーンが取り出されたときに計算する
+
+#### ループ1回分の流れ（simple_fork, zone = junction）
+
+```
+          heap（候補の列）                   best_turns（記録表）
+   ┌──────────────────────────┐        ┌──────────────────────┐
+   │ (1,junction)             │        │ start    : 0         │
+   └────────────┬─────────────┘        │ junction : 1         │
+                │ ① heappop（一番小さいものを取り出す）
+                ▼
+        turns = 1, zone = junction
+        「junction には 1 ターンで着いた」（ここで確定）
+                │
+                │ ② junction の隣を1本ずつ見る（adjacency["junction"]）
+                ▼
+   ┌────────────────────────────────────────────────────────────┐
+   │  edge.to   turns + edge.cost = next_turns    記録表の値        │
+   │  ──────    ─────────────────────────────    ────────        │
+   │  start       1   +    1      =    2           0             │
+   │  path_a      1   +    1      =    2         (なし)          │
+   │  path_b      1   +    1      =    2         (なし)          │
+   └───────────────────────────┬────────────────────────────────┘
+                               │ ③ 比べる: next_turns < 記録表の値 ？
+                ┌──────────────┴──────────────┐
+             No ▼                          Yes ▼
+     start: 2 < 0 → No               path_a: 2 < (なし) → Yes
+     何もしない（捨てる）                path_b: 2 < (なし) → Yes
+                                              │ ④ 記録して候補に並べる（仮の値）
+                                              ▼
+   ┌──────────────────────────┐        ┌──────────────────────┐
+   │ (2,path_a)               │        │ start    : 0         │
+   │ (2,path_b)               │◀─push  │ junction : 1         │
+   └──────────────────────────┘        │ path_a   : 2  ← 追加 │
+            heap                       │ path_b   : 2  ← 追加 │
+                                       └──────────────────────┘
+                                              best_turns
+```
+
+`(なし)` は記録表にまだないという意味。コードでは `best_turns.get(edge.to, next_turns + 1)` のデフォルト値が使われるので、比較は必ず Yes になる。
+
+#### next_turns の中身
+
+```
+  start ──────── junction ──────── path_a
+  (0ターン)          (1ターン)          (?)
+
+                 turns = 1        edge.cost = 1
+             ├────────────────┤├────────────┤
+             start→junction の   junction→path_a
+             合計ターン数          の1歩分
+                                  （行き先 path_a が normal なので1）
+
+             ├─────────────────────────────┤
+                    next_turns = 2
+             「この道を通ると path_a に 2 ターンで着く」
+```
+
+行き先が restricted なら、`edge.cost` が 2 になるだけ。
+
+```
+  junction ──────── R（restricted）
+  (1ターン)
+   turns=1   edge.cost=2   → next_turns = 3
+```
+
+#### simple_fork 全体の流れ
+
+```
+                    path_a
+                  ╱        ╲
+  start ── junction          goal
+                  ╲        ╱
+                    path_b
+```
+
+```
+回  ① 取り出す       ② 隣         ③ next_turns と比較        ④ heap の中身（後）
+──  ───────────    ─────────    ──────────────────────    ──────────────────────
+ 1  (0,start)      junction     0+1=1 < なし → 記録        [(1,junction)]
+
+ 2  (1,junction)   start        1+1=2 < 0    → 捨てる
+                   path_a       1+1=2 < なし → 記録
+                   path_b       1+1=2 < なし → 記録        [(2,path_a),(2,path_b)]
+
+ 3  (2,path_a)     junction     2+1=3 < 1    → 捨てる
+                   goal         2+1=3 < なし → 記録        [(2,path_b),(3,goal)]
+
+ 4  (2,path_b)     junction     2+1=3 < 1    → 捨てる
+                   goal         2+1=3 < 3    → 捨てる      [(3,goal)]
+                                （同じなので更新しない）
+
+ 5  (3,goal)       ── goal は end なので return 3
+```
+
+最後の記録表: `{start:0, junction:1, path_a:2, path_b:2, goal:3}`
+
+このプロジェクトでは入るコストが行き先ゾーンだけで決まるので、最初に記録された値が最短のまま変わらない。「より早ければ書き換える」処理と 60 行目の読み飛ばしは、ダイクストラ法として一般的な形で書いているためにある。
 
 ---
 
