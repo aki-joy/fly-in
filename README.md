@@ -154,6 +154,36 @@ reports `no path from '<start>' to '<end>'` and stops. No search runs forever.
 > distance is final. Then it tries to improve the distances of its neighbors.
 > Complexity: O((V + E) log V).
 
+#### Why the neighbor check compares distances
+
+In `Graph.shortest_turns`, a neighbor is pushed only when
+`next_turns < best_turns.get(edge.to, next_turns + 1)`.
+
+- **What is finalized.** When a zone is popped, its distance from start is
+  final. Whether the zone lies on the route to the end is not decided, and is
+  not needed: the function returns only a number.
+- **What makes the first value the shortest.** In this project the cost of a
+  move depends only on the destination zone (1, or 2 for restricted). So the
+  first distance recorded for a zone is already the shortest. This follows
+  from the heap order and the non-negative costs, not from the comparison.
+- **What the check is for.** It stops zones from being pushed again. Without
+  it, every move back toward start is pushed too. The heap grows without
+  limit, and on an unreachable map the loop never ends:
+
+  | Map | pushes with the check | pushes without |
+  |---|---|---|
+  | `easy/02_simple_fork` | 4 | 9 |
+  | `hard/03_ultimate_challenge` | 30 | 108,934 |
+  | `challenger/01_the_impossible_dream` | 53 | stopped at 200,000 |
+  | unreachable end | 4 (returns `None`) | never ends |
+
+- **Why `<` and not `if edge.to not in best_turns`.** Here both give the
+  same answers and the same number of pushes on every map. The `<` form is
+  the standard Dijkstra and stays correct if costs ever depend on the
+  connection. The `not in` form is correct only because of the
+  destination-only cost rule, and would return wrong turn counts if that rule
+  changed.
+
 ### Step 2: minimum number of turns (max flow)
 
 Layers are added one turn at a time. From layer `d` on, Edmonds–Karp pushes
@@ -501,6 +531,35 @@ restricted を 2 としてゾーンのグラフにダイクストラ法をかけ
 > ものを取り出す。これより短い経路はあとから見つからないので、その距離は確定
 > する。そのあと、隣のノードの距離を更新できるか調べる。
 > 計算量は O((V + E) log V)。
+
+#### 隣のゾーンを比較してから候補に入れる理由
+
+`Graph.shortest_turns` では、`next_turns < best_turns.get(edge.to, next_turns + 1)`
+のときだけ、隣のゾーンを heap に入れる。
+
+- **何が確定するか**：ゾーンを取り出した時点で確定するのは、start からそのゾーン
+  までの最短ターン数。そのゾーンが end への経路に入るかどうかは決まらないし、
+  決める必要もない（この関数が返すのはターン数だけ）。
+- **最初の値が最短になる理由**：このプロジェクトでは、移動のコストが行き先ゾーンの
+  種類だけで決まる（1、restricted は 2）。そのため、あるゾーンに最初に記録された
+  値がそのまま最短になる。これを保証しているのは heap が小さい順に取り出すことと、
+  コストがマイナスにならないことで、比較ではない。
+- **比較（判定）の役割**：記録済みのゾーンを heap に入れ直さないこと。判定がないと
+  start へ戻る移動なども毎回入れることになり、heap が際限なく増える。end に
+  到達できないマップでは、ループが終わらない。
+
+  | マップ | 判定あり の push 回数 | 判定なし |
+  |---|---|---|
+  | `easy/02_simple_fork` | 4 | 9 |
+  | `hard/03_ultimate_challenge` | 30 | 108,934 |
+  | `challenger/01_the_impossible_dream` | 53 | 200,000 回で打ち切り |
+  | end に到達できない | 4（`None` を返す） | 終わらない |
+
+- **`if edge.to not in best_turns` ではなく `<` にした理由**：このプロジェクトでは
+  どちらも、全マップで答えも push 回数も同じになる。`<` は一般的なダイクストラ法の
+  形で、コストが接続ごとに決まるルールに変わっても正しく動く。`not in` が正しいのは
+  「コストが行き先だけで決まる」というルールがあるからで、ルールが変わると間違った
+  ターン数を返してしまう。
 
 ### ステップ2：最小ターン数（最大流）
 
